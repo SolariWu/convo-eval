@@ -1,0 +1,9 @@
+src/
+test/
+docs/
+specs/
+.claude/
+*.config.ts
+tsconfig.json
+.gitignore
+.DS_Store
