@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import Anthropic from "@anthropic-ai/sdk";
 import {
   simulate,
   evaluate,
@@ -7,37 +6,108 @@ import {
   createResponseQualityEvaluator,
   EXPERT,
 } from "../../src/index.js";
-import type { AgentFunction, LLMFunction } from "../../src/types.js";
+import type { AgentFunction, LLMFunction, LLMMessage } from "../../src/types.js";
 
-const SKIP = !process.env.ANTHROPIC_API_KEY;
+// ── Provider selection ─────────────────────────────────────
+// Supports: ANTHROPIC_API_KEY (direct) or OPENROUTER_KEY (via OpenRouter)
 
-describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
-  const anthropic = new Anthropic();
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const OPENROUTER_KEY = process.env.OPENROUTER_KEY ?? process.env.OPENROUTER_API_KEY;
+const SKIP = !ANTHROPIC_KEY && !OPENROUTER_KEY;
+const PROVIDER = ANTHROPIC_KEY ? "anthropic" : "openrouter";
 
-  const claudeLLM: LLMFunction = async (messages) => {
+// Model IDs differ between providers
+const HAIKU_MODEL = PROVIDER === "openrouter"
+  ? "anthropic/claude-haiku-4.5"
+  : "claude-haiku-4-5-20251001";
+
+// ── OpenRouter helper ──────────────────────────────────────
+
+interface OpenRouterMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+async function openRouterChat(
+  messages: OpenRouterMessage[],
+  model: string
+): Promise<{ text: string; tokenUsage: number }> {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(`OpenRouter API error ${response.status}: ${body}`);
+  }
+
+  const data = (await response.json()) as any;
+  const text = data.choices?.[0]?.message?.content ?? "";
+  const tokenUsage = data.usage?.completion_tokens ?? 0;
+  return { text, tokenUsage };
+}
+
+// ── Sanitize messages for Anthropic (must alternate, start with user) ──
+
+function sanitizeForAnthropic(
+  chatMessages: Array<{ role: "user" | "assistant"; content: string }>
+): Array<{ role: "user" | "assistant"; content: string }> {
+  const sanitized: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const msg of chatMessages) {
+    if (sanitized.length === 0 && msg.role !== "user") {
+      sanitized.push({ role: "user", content: "(start)" });
+    }
+    if (sanitized.length > 0 && sanitized[sanitized.length - 1].role === msg.role) {
+      sanitized[sanitized.length - 1].content += "\n" + msg.content;
+    } else {
+      sanitized.push({ ...msg });
+    }
+  }
+  if (sanitized.length === 0) {
+    sanitized.push({ role: "user", content: "(start)" });
+  }
+  return sanitized;
+}
+
+// ── Build LLMFunction + AgentFunction for whichever provider is available ──
+
+function buildLLMFunction(): LLMFunction {
+  if (PROVIDER === "openrouter") {
+    return async (messages: LLMMessage[]) => {
+      const orMessages: OpenRouterMessage[] = messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      return openRouterChat(orMessages, HAIKU_MODEL);
+    };
+  }
+
+  // Anthropic direct
+  // Dynamic import to avoid hard failure when @anthropic-ai/sdk is not installed
+  let anthropicInstance: any = null;
+  return async (messages: LLMMessage[]) => {
+    if (!anthropicInstance) {
+      const { default: Anthropic } = await import("@anthropic-ai/sdk");
+      anthropicInstance = new Anthropic();
+    }
     const systemMsg = messages.find((m) => m.role === "system");
     const chatMessages = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
-    // Ensure messages alternate and start with user
-    const sanitized: Array<{ role: "user" | "assistant"; content: string }> = [];
-    for (const msg of chatMessages) {
-      if (sanitized.length === 0 && msg.role !== "user") {
-        sanitized.push({ role: "user", content: "(start)" });
-      }
-      if (sanitized.length > 0 && sanitized[sanitized.length - 1].role === msg.role) {
-        sanitized[sanitized.length - 1].content += "\n" + msg.content;
-      } else {
-        sanitized.push({ ...msg });
-      }
-    }
-    if (sanitized.length === 0) {
-      sanitized.push({ role: "user", content: "(start)" });
-    }
+    const sanitized = sanitizeForAnthropic(chatMessages);
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const response = await anthropicInstance.messages.create({
+      model: HAIKU_MODEL,
       max_tokens: 1024,
       system: systemMsg?.content,
       messages: sanitized,
@@ -46,8 +116,35 @@ describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     return { text, tokenUsage: response.usage.output_tokens };
   };
+}
 
-  const agentFn: AgentFunction = async (message, history) => {
+function buildAgentFunction(): AgentFunction {
+  if (PROVIDER === "openrouter") {
+    return async (message, history) => {
+      const messages: OpenRouterMessage[] = [
+        {
+          role: "system",
+          content: "You are a helpful travel assistant. Help users book flights and answer travel questions. Be concise.",
+        },
+      ];
+      for (const turn of history) {
+        messages.push({ role: "user", content: turn.userMessage });
+        messages.push({ role: "assistant", content: turn.agentResponse });
+      }
+      messages.push({ role: "user", content: message });
+
+      const { text } = await openRouterChat(messages, HAIKU_MODEL);
+      return { text, toolCalls: [] };
+    };
+  }
+
+  // Anthropic direct
+  let anthropicInstance: any = null;
+  return async (message, history) => {
+    if (!anthropicInstance) {
+      const { default: Anthropic } = await import("@anthropic-ai/sdk");
+      anthropicInstance = new Anthropic();
+    }
     const messages: Array<{ role: "user" | "assistant"; content: string }> = [];
     for (const turn of history) {
       messages.push({ role: "user", content: turn.userMessage });
@@ -55,8 +152,8 @@ describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
     }
     messages.push({ role: "user", content: message });
 
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+    const response = await anthropicInstance.messages.create({
+      model: HAIKU_MODEL,
       max_tokens: 1024,
       system: "You are a helpful travel assistant. Help users book flights and answer travel questions. Be concise.",
       messages,
@@ -65,19 +162,28 @@ describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
     const text = response.content[0].type === "text" ? response.content[0].text : "";
     return { text, toolCalls: [] };
   };
+}
+
+// ── Test ────────────────────────────────────────────────────
+
+describe.skipIf(SKIP)(`integration: full scenario with Claude (${PROVIDER})`, () => {
+  const llmFn = buildLLMFunction();
+  const agentFn = buildAgentFunction();
 
   it(
     "runs a full scenario: simulate + evaluate",
     async () => {
       const result = await simulate({
         scenario: {
-          startingPrompt: "I need to fly from San Francisco to Los Angeles next Tuesday morning. What are my options?",
-          conversationPlan: "Ask about flights from SFO to LAX for next Tuesday morning. Prefer flights under $200. If the agent suggests options, pick the cheapest one.",
+          startingPrompt:
+            "I need to fly from San Francisco to Los Angeles next Tuesday morning. What are my options?",
+          conversationPlan:
+            "Ask about flights from SFO to LAX for next Tuesday morning. Prefer flights under $200. If the agent suggests options, pick the cheapest one.",
           userPersona: EXPERT,
           maxTurns: 5,
         },
         agentFn,
-        simulatorLLM: claudeLLM,
+        simulatorLLM: llmFn,
       });
 
       expect(result.turns.length).toBeGreaterThanOrEqual(1);
@@ -93,10 +199,11 @@ describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
         },
         {
           evaluators: [
-            createPlanCompletionEvaluator({ judgeLLM: claudeLLM, threshold: 0.3 }),
+            createPlanCompletionEvaluator({ judgeLLM: llmFn, threshold: 0.3 }),
             createResponseQualityEvaluator({
-              judgeLLM: claudeLLM,
-              rubric: "The agent should be helpful, relevant, and provide travel-related information.",
+              judgeLLM: llmFn,
+              rubric:
+                "The agent should be helpful, relevant, and provide travel-related information.",
               threshold: 0.3,
             }),
           ],
@@ -110,12 +217,14 @@ describe.skipIf(SKIP)("integration: full scenario with Claude", () => {
         expect(evalResult.reason).toBeTruthy();
       }
 
-      console.log("Integration test results:");
+      console.log(`Integration test results (provider: ${PROVIDER}):`);
       console.log(`  Turns: ${result.turns.length}`);
       console.log(`  Plan completed: ${result.planCompleted}`);
       console.log(`  Overall: ${summary.overall}`);
       for (const e of summary.evaluators) {
-        console.log(`  ${e.evaluator}: ${e.score.toFixed(2)} (${e.pass ? "PASS" : "FAIL"}) — ${e.reason}`);
+        console.log(
+          `  ${e.evaluator}: ${e.score.toFixed(2)} (${e.pass ? "PASS" : "FAIL"}) — ${e.reason}`
+        );
       }
     },
     { timeout: 120_000 }
