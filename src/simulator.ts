@@ -14,6 +14,7 @@ const DEFAULT_STOP_SIGNAL = "</finished>";
 export class UserSimulator {
   private config: UserSimulatorConfig;
   public totalSimulatorTokens = 0;
+  public planCompleted = false;
 
   constructor(config: UserSimulatorConfig) {
     this.config = config;
@@ -57,6 +58,9 @@ export class UserSimulator {
       const messages: LLMMessage[] = [
         { role: "system", content: systemPrompt },
       ];
+      // From the simulator LLM's perspective, *it* generated the user messages
+      // (hence "assistant"), and the agent responses are input it received (hence "user").
+      // This inversion is correct: the simulator plays the user role.
       for (const t of turns) {
         messages.push({ role: "assistant", content: t.userMessage });
         messages.push({ role: "user", content: t.agentResponse });
@@ -67,6 +71,7 @@ export class UserSimulator {
       this.totalSimulatorTokens += extractTokenUsage(simulatorResponse);
 
       if (simulatorText.includes(stopSignal)) {
+        this.planCompleted = true;
         break;
       }
 

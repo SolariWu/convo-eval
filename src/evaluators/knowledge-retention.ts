@@ -21,15 +21,36 @@ export interface KnowledgeRetentionConfig {
 }
 
 function extractFacts(raw: string): string[] {
-  const jsonMatch = raw.match(/\{[\s\S]*?"facts"[\s\S]*?\}/);
-  if (!jsonMatch) return [];
+  // Try full parse first
   try {
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(raw);
     const result = FactsSchema.safeParse(parsed);
-    return result.success ? result.data.facts : [];
+    if (result.success) return result.data.facts;
   } catch {
-    return [];
+    // Try extraction
   }
+
+  // Find JSON object by matching braces
+  const startIdx = raw.indexOf("{");
+  if (startIdx === -1) return [];
+
+  let depth = 0;
+  for (let i = startIdx; i < raw.length; i++) {
+    if (raw[i] === "{") depth++;
+    else if (raw[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        try {
+          const parsed = JSON.parse(raw.slice(startIdx, i + 1));
+          const result = FactsSchema.safeParse(parsed);
+          return result.success ? result.data.facts : [];
+        } catch {
+          return [];
+        }
+      }
+    }
+  }
+  return [];
 }
 
 export function createKnowledgeRetentionEvaluator(

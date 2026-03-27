@@ -96,8 +96,7 @@ export interface Evaluator {
   name: string;
   evaluate(
     result: SimulationResult,
-    scenario: ConversationScenario,
-    llm?: LLMFunction
+    scenario: ConversationScenario
   ): Promise<EvalResult>;
 }
 

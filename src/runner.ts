@@ -23,12 +23,10 @@ export async function simulate(config: SimulateConfig): Promise<SimulationResult
     };
   }
 
-  const planCompleted = turns.length < maxTurns;
-
   return {
     turns,
-    planCompleted,
-    terminationReason: planCompleted ? "stop_signal" : "max_turns",
+    planCompleted: simulator.planCompleted,
+    terminationReason: simulator.planCompleted ? "stop_signal" : "max_turns",
     tokenUsage: { simulator: simulator.totalSimulatorTokens, agent: 0 },
   };
 }

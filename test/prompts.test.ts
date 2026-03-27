@@ -54,6 +54,11 @@ describe("parseJudgeResponse", () => {
     const result = parseJudgeResponse('{"score": 1.5, "reason": "Over"}');
     expect(result.score).toBe(1);
   });
+  it("parses JSON with reason before score", () => {
+    const result = parseJudgeResponse('{"reason": "Good job", "score": 0.8}');
+    expect(result.score).toBe(0.8);
+    expect(result.reason).toBe("Good job");
+  });
 });
 
 describe("judge prompts", () => {

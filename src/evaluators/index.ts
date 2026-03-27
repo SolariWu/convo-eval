@@ -1,4 +1,4 @@
-import type { EvalResult, Evaluator, SimulationResult, ConversationScenario, LLMFunction } from "../types.js";
+import type { EvalResult, Evaluator, SimulationResult, ConversationScenario } from "../types.js";
 
 export { createTrajectoryEvaluator } from "./trajectory.js";
 export { createPlanCompletionEvaluator } from "./plan-completion.js";
@@ -11,8 +11,7 @@ interface DefineEvaluatorConfig {
   name: string;
   evaluate(
     result: SimulationResult,
-    scenario: ConversationScenario,
-    llm?: LLMFunction
+    scenario: ConversationScenario
   ): Promise<Omit<EvalResult, "evaluator">>;
 }
 
@@ -21,10 +20,9 @@ export function defineEvaluator(config: DefineEvaluatorConfig): Evaluator {
     name: config.name,
     async evaluate(
       result: SimulationResult,
-      scenario: ConversationScenario,
-      llm?: LLMFunction
+      scenario: ConversationScenario
     ): Promise<EvalResult> {
-      const evalResult = await config.evaluate(result, scenario, llm);
+      const evalResult = await config.evaluate(result, scenario);
       return { evaluator: config.name, ...evalResult };
     },
   };
