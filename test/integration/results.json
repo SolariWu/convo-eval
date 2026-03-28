@@ -1,0 +1,96 @@
+{
+  "provider": "openrouter",
+  "model": "anthropic/claude-haiku-4.5",
+  "scenario": {
+    "startingPrompt": "I need to fly from San Francisco to Los Angeles next Tuesday morning. What are my options?",
+    "conversationPlan": "Ask about flights from SFO to LAX for next Tuesday morning. Prefer flights under $200. If the agent suggests options, pick the cheapest one.",
+    "userPersona": {
+      "name": "expert",
+      "description": "A detail-oriented, knowledgeable user who proactively provides all relevant information without being asked. Communicates clearly and precisely.",
+      "behaviors": [
+        {
+          "name": "proactive_information_sharing",
+          "description": "Volunteers all relevant details upfront — dates, preferences, constraints — without waiting to be asked.",
+          "violationRubrics": [
+            "The user withheld information that was relevant to their request",
+            "The user waited to be asked for details they could have provided upfront"
+          ]
+        },
+        {
+          "name": "detailed_responses",
+          "description": "Gives thorough, specific answers. Uses exact values, names, and identifiers rather than vague references.",
+          "violationRubrics": [
+            "The user gave a vague or imprecise answer when specifics were available",
+            "The user used ambiguous references instead of exact values"
+          ]
+        }
+      ]
+    },
+    "maxTurns": 5
+  },
+  "simulation": {
+    "turns": [
+      {
+        "index": 0,
+        "userMessage": "I need to fly from San Francisco to Los Angeles next Tuesday morning. What are my options?",
+        "agentResponse": "I'd be happy to help! To find the best flight options for you, I need a few details:\n\n1. **Which Tuesday?** (specific date)\n2. **What time in the morning?** (e.g., 6am, 8am, 10am)\n3. **Do you have a return flight needed?**\n4. **Any airline preferences?**\n5. **Flexible on dates/times?**\n\n**Quick note:** SFO to LAX is a short 1-hour flight with multiple daily options. You'll find flights from major carriers like United, Southwest, American, and Delta running frequently throughout the day.\n\nOnce you provide those details, I can give you more specific recommendations or help you book!",
+        "toolCalls": [],
+        "durationMs": 2339
+      },
+      {
+        "index": 1,
+        "userMessage": "I'm looking to travel next Tuesday, November 19th. I'd prefer an early morning departure—ideally between 6am and 8am. This is a one-way trip, so no return flight needed. I'm flexible on the exact time within that window, but I want to maximize my time in LA. My main constraint is that I need to keep the fare under $200. I don't have strong airline preferences, so I'm open to any carrier—just looking for the best value option that meets those criteria.",
+        "agentResponse": "Perfect! Here's what you need to know for **SFO to LAX on Tuesday, November 19th, 6am-8am:**\n\n**Good news:**\n- Early morning flights on this route typically cost **$80-150**, so staying under $200 should be very doable\n- You'll have the full day in LA with an early arrival\n\n**To book, I recommend:**\n\n1. **Check these sites for best prices:**\n   - Google Flights\n   - Kayak\n   - Southwest.com (often competitive on this route)\n   - Airline sites directly (United, Southwest, American, Delta)\n\n2. **Search filters to use:**\n   - Departure: 6:00am - 8:00am\n   - One-way trip\n   - Sort by price\n\n3. **Tips to save:**\n   - Book ASAP (prices typically rise closer to travel date)\n   - Tuesday flights are usually cheaper than weekends\n   - Set price alerts if you want to monitor for drops\n\n**Expected flight time:** ~1 hour\n**Arrival in LA:** Around 7-9am (depending on departure time)\n\nUnfortunately, I can't book directly through this chat, but those comparison sites will show you real-time availability and prices across all carriers. You should easily find options well under $200.\n\nNeed help with anything else—ground transportation in LA, luggage info, or airport details?",
+        "toolCalls": [],
+        "durationMs": 3665
+      },
+      {
+        "index": 2,
+        "userMessage": "Thanks for the guidance. I appreciate the recommendations, but I was hoping you could show me the actual available flights and prices for that morning so I can compare them directly. Can you pull up the specific options for Tuesday, November 19th between 6am and 8am from SFO to LAX? I'd like to see which carrier has the cheapest fare under $200 so I can book right away.",
+        "agentResponse": "I appreciate the question, but I need to be upfront: **I don't have access to real-time flight data or pricing information.** I can't pull up actual available flights, current fares, or seat availability.\n\nTo see specific flights and prices for November 19th, you'll need to check directly:\n\n**Best options:**\n- **Google Flights** (easiest comparison across airlines)\n- **Kayak** or **Skyscanner** (good for price tracking)\n- **Airline websites** (Southwest, United, American, Delta)\n\nThese sites will show you:\n- ✈️ Exact departure/arrival times\n- 💰 Real prices for that specific date\n- 🪑 Available seats\n- Direct booking capability\n\n**Quick tip:** Since you want to book right away, I'd suggest checking Google Flights first—it's typically the fastest way to compare all carriers side-by-side and filter by your 6am-8am window.\n\nGiven the route and timing, you should find several options under $200 within minutes.\n\nIs there anything else I *can* help with—like airport tips, what to expect at SFO, or LA ground transportation?",
+        "toolCalls": [],
+        "durationMs": 3132
+      }
+    ],
+    "planCompleted": true,
+    "terminationReason": "stop_signal",
+    "tokenUsage": {
+      "simulator": 313,
+      "agent": 0
+    }
+  },
+  "evaluation": {
+    "overall": "PASS",
+    "evaluators": [
+      {
+        "evaluator": "plan-completion",
+        "score": 1,
+        "pass": true,
+        "reason": "The goal was to 'Ask about flights from SFO to LAX,' which the agent successfully completed. The agent asked clarifying questions about the flight requirements (date, time, return flight, preferences, budget), engaged in a multi-turn conversation about SFO to LAX flights, and provided relevant information about the route including typical pricing, flight duration, and booking recommendations. While the user asked for real-time flight data that the agent couldn't provide, the agent still thoroughly addressed the topic of flights from SFO to LAX by discussing the route characteristics, expected costs, and how to find available options. The goal of 'asking about' these flights was fully achieved."
+      },
+      {
+        "evaluator": "response-quality",
+        "score": 0.85,
+        "pass": true,
+        "reason": "Average response quality: 0.85",
+        "perTurn": [
+          {
+            "turnIndex": 0,
+            "score": 0.85,
+            "reason": "The agent's response is helpful and relevant, asking clarifying questions to better assist the user. It demonstrates knowledge of the SFO-LAX route (1-hour flight, major carriers) and provides useful context. However, the response is somewhat limited in that it doesn't offer immediate actionable options—the agent could have suggested checking specific booking sites (Google Flights, Kayak, airline websites) or provided general timing expectations for morning flights. The questions are appropriate but the response could be more proactive in offering concrete next steps while waiting for clarification."
+          },
+          {
+            "turnIndex": 1,
+            "score": 0.85,
+            "reason": "The agent provides highly relevant, helpful travel information that directly addresses the user's specific requirements (early morning departure, one-way trip, under $200 budget, maximizing LA time). The response includes practical booking guidance, realistic price expectations, and actionable search strategies. The tips about booking timing and price alerts add value. The agent appropriately acknowledges its limitations (cannot book directly) and offers additional help. Minor deduction because the agent assumes the origin airport (SFO) without the user explicitly stating it, which could be inaccurate and represents a small gap in gathering complete information before providing recommendations."
+          },
+          {
+            "turnIndex": 2,
+            "score": 0.85,
+            "reason": "The agent's response is highly helpful and relevant. It appropriately sets expectations by clearly stating the limitation (no real-time flight data access), which is honest and prevents user frustration. The agent then provides practical, actionable alternatives with specific tools ranked by usefulness (Google Flights first). The response includes relevant details about what information users will find on these platforms and adds a useful tip about speed and comparison capability. The offer of alternative assistance (airport tips, ground transportation) keeps the conversation helpful within the agent's capabilities. The only minor deductions are: (1) the response could have been slightly more concise, and (2) while mentioning the SFO-LAX route typically has sub-$200 options is helpful, adding a note about typical flight frequency during that time window could have been more informative. Overall, this is a well-executed response that manages expectations while remaining genuinely useful."
+          }
+        ]
+      }
+    ]
+  }
+}
